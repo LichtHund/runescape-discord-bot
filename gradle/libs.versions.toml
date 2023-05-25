@@ -1,0 +1,36 @@
+[versions]
+# Kotlin
+kotlin = "1.8.21"
+coroutines = "1.7.1"
+serialization = "1.5.1"
+
+# Discord
+kord = "0.9.0"
+
+# Nebula
+nebula = "1.0.0-SNAPSHOT"
+
+# Service
+ktor = "2.3.0"
+
+[libraries]
+# Kotlin
+coroutines = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
+serialization-hocon = { module = "org.jetbrains.kotlinx:kotlinx-serialization-hocon", version.ref = "serialization" }
+
+# Discord
+kord = { module = "dev.kord:kord-core", version.ref = "kord" }
+
+# Nebula
+nebula = { module = "dev.triumphteam:nebula", version.ref = "nebula" }
+
+# Service
+ktor-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
+ktor-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
+ktor-negociator = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "ktor" }
+ktor-negociator-json = { module = "io.ktor:ktor-serialization-kotlinx-json", version.ref = "ktor" }
+
+# Build plugins
+build-kotlin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
+build-kotlin-serialization = { module = "org.jetbrains.kotlin:kotlin-serialization", version.ref = "kotlin" }
