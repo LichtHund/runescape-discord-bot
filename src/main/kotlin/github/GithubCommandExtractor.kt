@@ -1,6 +1,11 @@
 package dev.triumphteam.pvm.github
 
+import dev.kord.common.Color
+import dev.kord.common.entity.DiscordEmbed
+import dev.kord.common.entity.optional.value
 import dev.kord.core.behavior.reply
+import dev.kord.core.event.message.MessageCreateEvent
+import dev.kord.rest.builder.message.create.embed
 import dev.triumphteam.nebula.ModularApplication
 import dev.triumphteam.nebula.container.Container
 import dev.triumphteam.nebula.container.inject
@@ -33,13 +38,12 @@ public class GithubCommandExtractor(container: Container) : BaseModule(container
 
     private val coroutineScope = CoroutineScope(Dispatchers.IO)
 
+    private val json = Json {
+        ignoreUnknownKeys = true
+    }
     private val client = HttpClient(CIO) {
         install(ContentNegotiation) {
-            json(
-                Json {
-                    ignoreUnknownKeys = true
-                }
-            )
+            json(json)
         }
     }
     private val downloadClient = HttpClient(CIO)
@@ -90,13 +94,39 @@ public class GithubCommandExtractor(container: Container) : BaseModule(container
 
     private fun loadCommands() {
         val files = commandsFolder.listFiles() ?: return
+
         files.forEach { file ->
-            commandManager.register(file.nameWithoutExtension) { event ->
-                event.message.reply {
-                    content = file.readText().lines().dropLast(2).joinToString("\n")
+            val fileLines = file.readText()
+                .lines()
+                .map { it.trim() }
+                .filter { it != "." }
+                .filterNot(String::isEmpty)
+
+            val (type, value) = PARSER_REGEX.matchEntire(fileLines.last())?.destructured ?: run {
+                println("Ignoring ${file.name}, cuz ????")
+                return@forEach
+            }
+
+            when (type) {
+                "img" -> {
+                    commandManager.register(file.nameWithoutExtension, ImageCommand(value))
+                    return@forEach
+                }
+
+                "embed" -> {
+                    val json = fileLines.dropLast(1).joinToString("\n")
+                    val test = Json.decodeFromString<EmbedHolder>(json)
+                    commandManager.register(file.nameWithoutExtension, EmbedCommand(test.embed))
+                }
+
+                else -> {
+                    println("No idea what this is, check -> ${file.name}")
+                    return@forEach
                 }
             }
         }
+
+        println("ALL JSON STRINGS FOUND")
     }
 
     @Serializable
@@ -111,8 +141,72 @@ public class GithubCommandExtractor(container: Container) : BaseModule(container
         public val download: String,
     )
 
+    @Serializable
+    public data class EmbedHolder(public val embed: DiscordEmbed)
+
+    public interface ParsedCommand : suspend (MessageCreateEvent) -> Unit
+
+    public class EmbedCommand(private val embed: DiscordEmbed) : ParsedCommand {
+
+        override suspend fun invoke(event: MessageCreateEvent) {
+            event.message.reply {
+                embed {
+                    this.url = embed.url.value
+                    this.description = embed.description.value
+
+                    embed.author.value?.let { author ->
+                        author {
+                            this.name = author.name.value
+                            this.url = author.url.value
+                            this.icon = author.url.value
+                        }
+                    }
+
+                    this.color = embed.color.value?.let { Color(it) }
+
+                    embed.fields.value?.forEach { field ->
+                        field {
+                            this.value = field.value
+                            this.name = field.name
+                            this.inline = field.inline.value
+                        }
+                    }
+
+                    embed.footer.value?.let { footer ->
+                        footer {
+                            this.icon = footer.iconUrl.value
+                            this.text = footer.text
+                        }
+                    }
+
+                    embed.image.value?.let { image -> this.image = image.url.value }
+
+                    embed.thumbnail.value?.let { thumbnail ->
+                        thumbnail {
+                            this.url = thumbnail.url.value ?: ""
+                        }
+                    }
+
+                    this.timestamp = embed.timestamp.value
+                }
+            }
+        }
+    }
+
+    public class ImageCommand(private val image: String) : ParsedCommand {
+
+        override suspend fun invoke(event: MessageCreateEvent) {
+            event.message.reply {
+                embed {
+                    this.image = this@ImageCommand.image
+                }
+            }
+        }
+    }
+
     public companion object Factory : ModuleFactory<GithubCommandExtractor> {
 
+        private val PARSER_REGEX = "\\.(?<type>\\w+):(?<value>.*)".toRegex()
         private const val GITHUB_API = "https://api.github.com"
         private const val REPO = "pvme/pvme-guides"
 
